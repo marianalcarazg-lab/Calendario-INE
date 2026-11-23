@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendario ELEC2027 – Seguimiento</title>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/es.global.min.js"></script>
+<style>
+  :root { --bg:#f4f6fa; --card:#fff; --txt:#1f2937; --muted:#6b7280; --pri:#2563eb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--txt); }
+  header { padding:14px 20px; background:#111827; color:#fff; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; }
+  header h1 { font-size:1.15rem; margin:0; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; }
+  button { cursor:pointer; border:0; border-radius:8px; padding:8px 12px; font-size:.9rem; background:var(--pri); color:#fff; }
+  button.sec { background:#e5e7eb; color:#111827; }
+  button.danger { background:#dc2626; }
+  header button.sec { background:#374151; color:#fff; }
+  main { padding:16px; max-width:1400px; margin:auto; }
+  .panel { background:var(--card); border-radius:12px; padding:12px 16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .filters { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+  .filters label { display:flex; align-items:center; gap:6px; font-size:.85rem; cursor:pointer; }
+  .dot { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .progress { display:flex; align-items:center; gap:10px; font-size:.9rem; }
+  .bar { flex:1; height:10px; background:#e5e7eb; border-radius:99px; overflow:hidden; }
+  .bar > div { height:100%; background:#16a34a; width:0; transition:width .3s; }
+  #calendar { background:var(--card); border-radius:12px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .fc-event { cursor:pointer; font-size:.78rem; }
+  .fc-event.done { opacity:.55; }
+  .fc-event.done .fc-event-title { text-decoration:line-through; }
+  dialog { border:0; border-radius:14px; padding:20px; width:min(480px, 94vw); box-shadow:0 10px 40px rgba(0,0,0,.3); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  dialog h2 { margin-top:0; font-size:1.1rem; }
+  .row { display:flex; gap:10px; }
+  .row > * { flex:1; }
+  label.f { display:block; font-size:.8rem; color:var(--muted); margin-top:10px; }
+  input[type=text], input[type=date], input[type=time], select, textarea {
+    width:100%; padding:8px; border:1px solid #d1d5db; border-radius:8px; font:inherit; margin-top:3px; }
+  .check { display:flex; align-items:center; gap:6px; margin-top:12px; font-size:.9rem; }
+  .actions { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+  .actions .left { margin-right:auto; }
+  small.hint { color:var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📅 Calendario ELEC2027 – SE y CAE</h1>
+  <div class="toolbar">
+    <button id="btnNew">+ Nueva actividad</button>
+    <button class="sec" id="btnExport">⬇ Exportar</button>
+    <button class="sec" id="btnImport">⬆ Importar</button>
+    <button class="sec" id="btnReset">↺ Restablecer</button>
+    <input type="file" id="fileInput" accept="application/json" hidden>
+  </div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="progress">
+      <span id="progressTxt">0 de 0 completadas</span>
+      <div class="bar"><div id="progressBar"></div></div>
+    </div>
+  </div>
+  <div class="panel filters" id="filters"></div>
+  <div id="calendar"></div>
+  <p><small class="hint">Arrastra para mover, estira los bordes para cambiar la duración, clic para editar o marcar como completada. Los cambios se guardan en este navegador; usa “Exportar” para respaldarlos.</small></p>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h2 id="dlgTitle">Actividad</h2>
+    <label class="f">Título
+      <input type="text" id="fTitle" required>
+    </label>
+    <label class="f">Categoría
+      <select id="fCat"></select>
+    </label>
+    <div class="row">
+      <label class="f">Fecha inicio <input type="date" id="fStart" required></label>
+      <label class="f">Fecha fin <input type="date" id="fEnd" required></label>
+    </div>
+    <label class="check"><input type="checkbox" id="fAllDay" checked> Todo el día</label>
+    <div class="row" id="timeRow" style="display:none">
+      <label class="f">Hora inicio <input type="time" id="fStartT" value="10:00"></label>
+      <label class="f">Hora fin <input type="time" id="fEndT" value="12:00"></label>
+    </div>
+    <label class="f">Notas
+      <textarea id="fNotes" rows="3"></textarea>
+    </label>
+    <label class="check"><input type="checkbox" id="fDone"> ✅ Completada</label>
+    <div class="actions">
+      <button type="button" class="danger left" id="btnDelete">Eliminar</button>
+      <button type="button" class="sec" id="btnCancel">Cancelar</button>
+      <button type="submit" id="btnSave">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ================== CONFIGURACIÓN ================== */
+const STORAGE_KEY = 'calendarioELEC2027_v1';
+
+const CATS = {
+  difusion:     { label: 'Difusión y recepción',      color: '#2563eb' },
+  sedes:        { label: 'Sedes / Multisistema',      color: '#7c3aed' },
+  evaluacion:   { label: 'Evaluación de conocimientos', color: '#ea580c' },
+  entrevistas:  { label: 'Entrevistas',               color: '#0891b2' },
+  resultados:   { label: 'Designación / Resultados',  color: '#16a34a' },
+  contratacion: { label: 'Contratación / Expedientes',color: '#be185d' },
+  limite:       { label: 'Fecha límite',              color: '#dc2626' },
+  otra:         { label: 'Otra',                      color: '#6b7280' }
+};
+
+/* ================== ACTIVIDADES INICIALES ==================
+   Fechas "inclusivas" (inicio y fin cuentan como días de la actividad). */
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmt(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function addDays(s, n){ const d = new Date(s+'T00:00:00'); d.setDate(d.getDate()+n); return fmt(d); }
+
+// Actividad de todo el día (fin inclusivo; si no hay fin, es de un solo día)
+function R(id, title, ini, fin, cat, notes=''){
+  return { id, title, start: ini, end: fin ? addDays(fin,1) : null, allDay:true, cat, done:false, notes };
+}
+// Actividad con horario
+function T(id, title, ini, fin, cat, notes=''){
+  return { id, title, start: ini, end: fin, allDay:false, cat, done:false, notes };
+}
+
+function defaultEvents(){ return [
+  R('a01','Difusión de la Convocatoria (1er periodo)','2026-11-09','2026-12-07','difusion'),
+  R('a02','Cápsula de inducción','2026-11-09','2026-12-11','difusion'),
+  R('a03','Recepción y revisión documental','2026-11-09','2026-12-08','difusion'),
+  R('a04','Plazo para subsanar observaciones (corrección por la persona aspirante / JDE)','2026-11-09','2026-12-11','difusion','Aplica cuando la persona aspirante no cumple con las características requeridas.'),
+
+  R('a05','LÍMITE: JDE registran sedes de aplicación de Evaluación de conocimientos en Multisistema ELEC2027','2026-12-03',null,'limite'),
+  R('a06','LÍMITE: Remitir Evaluación de conocimientos (en línea e impresa) a la DCE, vía JLE','2026-12-07',null,'limite'),
+  R('a07','LÍMITE: JDE registran sedes de aplicación de entrevistas en Multisistema ELEC2027','2026-12-07',null,'limite'),
+  R('a08','LÍMITE: Asignación de sedes a cada persona aspirante en Multisistema ELEC2027','2026-12-10',null,'limite'),
+
+  T('a09','Evaluación SE/CAE – Versión 1','2026-12-12T10:00:00','2026-12-12T12:00:00','evaluacion','Hora centro del país'),
+  T('a10','Evaluación SE/CAE – Versión 2','2026-12-12T13:00:00','2026-12-12T15:00:00','evaluacion','Hora centro del país'),
+  T('a11','Evaluación SE/CAE – Versión 3','2026-12-12T16:00:00','2026-12-12T18:00:00','evaluacion','Hora centro del país'),
+  T('a12','Evaluación SE/CAE – Versión 4','2026-12-13T10:00:00','2026-12-13T12:00:00','evaluacion','Hora centro del país'),
+  T('a13','Evaluación SE/CAE – Versión 5','2026-12-13T13:00:00','2026-12-13T15:00:00','evaluacion','Hora centro del país'),
+
+  R('a14','Publicar resultados de evaluación + calendario de entrevistas (estrados de la JDE)','2026-12-14',null,'resultados'),
+  R('a15','Entrega del calendario de entrevistas a consejerías distritales (VCEyEC, coord. por VE)','2026-12-14',null,'entrevistas'),
+  R('a16','Entrevistas (primero SE, al concluir continúan CAE)','2026-12-15','2027-01-19','entrevistas'),
+
+  R('a17','Conformación de ZORE y ARE (límite)','2027-01-12',null,'limite','Inicia desde la notificación del número de figuras SE y CAE asignadas a la entidad. Ajusta la fecha de inicio cuando la tengas.'),
+  R('a18','Designación por el Consejo Distrital (Acuerdo) y publicación de resultados finales en estrados','2027-01-20',null,'resultados','Incluye listas de reserva.'),
+
+  R('a19','Entrega de expedientes – SE (responsable: VS)','2027-01-20','2027-01-21','contratacion'),
+  R('a20','Entrega de expedientes – CAE (responsable: VS)','2027-01-21','2027-01-23','contratacion'),
+
+  R('a21','Contratación SE','2027-01-24','2027-06-14','contratacion'),
+  R('a22','Contratación CAE','2027-01-29','2027-06-14','contratacion'),
+
+  R('a23','LÍMITE: Convocatoria permanente – última fecha de recepción de solicitudes y documentos','2027-06-02',null,'limite'),
+
+  R('a24','Resultados de la evaluación del desempeño SE y CAE (obtención)','2027-06-15','2027-06-22','resultados'),
+  R('a25','1ª sesión CD de junio: informar procedimiento y resultados de evaluación; Acuerdo de bono de productividad','2027-06-15',null,'resultados','Fecha por definir: mueve esta actividad a la fecha real de la sesión del CD en junio de 2027.')
+];}
+
+/* ================== ESTADO ================== */
+let store = load();
+let hidden = new Set();
+let editingId = null;
+
+function load(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return defaultEvents();
+}
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  updateProgress();
+}
+function updateProgress(){
+  const total = store.length, done = store.filter(e=>e.done).length;
+  document.getElementById('progressTxt').textContent =
+    `${done} de ${total} completadas (${total ? Math.round(done*100/total) : 0}%)`;
+  document.getElementById('progressBar').style.width = (total ? done*100/total : 0) + '%';
+}
+
+/* ================== CALENDARIO ================== */
+function toFC(e){
+  const c = (CATS[e.cat] || CATS.otra).color;
+  return {
+    id: e.id, title: (e.done ? '✅ ' : '') + e.title,
+    start: e.start, end: e.end || undefined, allDay: e.allDay,
+    backgroundColor: c, borderColor: c,
+    classNames: e.done ? ['done'] : [],
+    extendedProps: { notes: e.notes }
+  };
+}
+
+const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+  locale: 'es',
+  initialView: 'dayGridMonth',
+  initialDate: '2026-11-09',
+  firstDay: 1,
+  height: 'auto',
+  editable: true,
+  selectable: true,
+  dayMaxEvents: 4,
+  nowIndicator: true,
+  headerToolbar: {
+    left: 'prev,next today',
+    center: 'title',
+    right: 'dayGridMonth,timeGridWeek,listMonth'
+  },
+  events: (info, ok) => ok(store.filter(e => !hidden.has(e.cat)).map(toFC)),
+  eventDrop: syncFrom,
+  eventResize: syncFrom,
+  eventClick: info => openDialog(info.event.id),
+  select: info => {
+    openDialog(null, info.startStr.slice(0,10),
+      info.allDay ? addDays(info.endStr.slice(0,10), -1) : info.startStr.slice(0,10));
+    calendar.unselect();
+  },
+  eventDidMount: info => {
+    const n = info.event.extendedProps.notes;
+    info.el.title = info.event.title + (n ? '\n' + n : '');
+  }
+});
+calendar.render();
+
+function syncFrom(info){
+  const ev = info.event;
+  const item = store.find(x => x.id === ev.id);
+  if (!item) return;
+  item.allDay = ev.allDay;
+  item.start = ev.allDay ? ev.startStr.slice(0,10) : ev.startStr.slice(0,19);
+  if (ev.end) item.end = ev.allDay ? ev.endStr.slice(0,10) : ev.endStr.slice(0,19);
+  else item.end = null;
+  save();
+}
+
+/* ================== FILTROS ================== */
+const filtersEl = document.getElementById('filters');
+const catSelect = document.getElementById('fCat');
+Object.entries(CATS).forEach(([k,v]) => {
+  filtersEl.insertAdjacentHTML('beforeend',
+    `<label><input type="checkbox" data-cat="${k}" checked>
+     <span class="dot" style="background:${v.color}"></span>${v.label}</label>`);
+  catSelect.insertAdjacentHTML('beforeend', `<option value="${k}">${v.label}</option>`);
+});
+filtersEl.addEventListener('change', e => {
+  const k = e.target.dataset.cat;
+  e.target.checked ? hidden.delete(k) : hidden.add(k);
+  calendar.refetchEvents();
+});
+
+/* ================== DIÁLOGO ================== */
+const $ = id => document.getElementById(id);
+const dlg = $('dlg');
+
+$('fAllDay').addEventListener('change', () => {
+  $('timeRow').style.display = $('fAllDay').checked ? 'none' : 'flex';
+});
+
+function openDialog(id, startDate, endDate){
+  editingId = id;
+  const e = id ? store.find(x => x.id === id) : null;
+  $('dlgTitle').textContent = e ? 'Editar actividad' : 'Nueva actividad';
+  $('btnDelete').style.display = e ? '' : 'none';
+
+  if (e){
+    $('fTitle').value = e.title;
+    $('fCat').value = e.cat;
+    $('fAllDay').checked = e.allDay;
+    $('fStart').value = e.start.slice(0,10);
+    if (e.allDay){
+      $('fEnd').value = e.end ? addDays(e.end.slice(0,10), -1) : e.start.slice(0,10);
+    } else {
+      $('fEnd').value = (e.end || e.start).slice(0,10);
+      $('fStartT').value = e.start.slice(11,16);
+      $('fEndT').value = (e.end || e.start).slice(11,16);
+    }
+    $('fNotes').value = e.notes || '';
+    $('fDone').checked = !!e.done;
+  } else {
+    const today = startDate || fmt(new Date());
+    $('fTitle').value = '';
+    $('fCat').value = 'otra';
+    $('fAllDay').checked = true;
+    $('fStart').value = today;
+    $('fEnd').value = endDate || today;
+    $('fStartT').value = '10:00'; $('fEndT').value = '12:00';
+    $('fNotes').value = '';
+    $('fDone').checked = false;
+  }
+  $('fAllDay').dispatchEvent(new Event('change'));
+  dlg.showModal();
+}
+
+$('btnNew').onclick = () => openDialog(null);
+$('btnCancel').onclick = () => dlg.close();
+
+$('form').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const allDay = $('fAllDay').checked;
+  let s = $('fStart').value, en = $('fEnd').value;
+  if (en < s) en = s;
+  const obj = {
+    id: editingId || 'u' + Date.now(),
+    title: $('fTitle').value.trim(),
+    cat: $('fCat').value,
+    allDay,
+    start: allDay ? s : `${s}T${$('fStartT').value || '00:00'}:00`,
+    end:   allDay ? addDays(en, 1) : `${en}T${$('fEndT').value || '23:59'}:00`,
+    notes: $('fNotes').value,
+    done: $('fDone').checked
+  };
+  if (editingId){
+    store[store.findIndex(x => x.id === editingId)] = obj;
+  } else {
+    store.push(obj);
+  }
+  save();
+  calendar.refetchEvents();
+  dlg.close();
+});
+
+$('btnDelete').onclick = () => {
+  if (!confirm('¿Eliminar esta actividad?')) return;
+  store = store.filter(x => x.id !== editingId);
+  save();
+  calendar.refetchEvents();
+  dlg.close();
+};
+
+/* ================== EXPORTAR / IMPORTAR / RESET ================== */
+$('btnExport').onclick = () => {
+  const blob = new Blob([JSON.stringify(store, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'calendario-elec2027-respaldo.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('btnImport').onclick = () => $('fileInput').click();
+$('fileInput').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if (!Array.isArray(data)) throw 0;
+      store = data; save(); calendar.refetchEvents();
+    } catch(err){ alert('Archivo no válido.'); }
+  };
+  r.readAsText(f);
+  e.target.value = '';
+});
+$('btnReset').onclick = () => {
+  if (!confirm('Se perderán tus cambios y se restablecerán las fechas originales. ¿Continuar?')) return;
+  store = defaultEvents(); save(); calendar.refetchEvents();
+};
+
+updateProgress();
+</script>
+</body>
+</html>
